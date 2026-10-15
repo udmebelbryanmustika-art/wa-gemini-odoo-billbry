@@ -21,7 +21,7 @@ ODOO_DB = os.getenv("ODOO_DB")
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Server Bot WA UD BAJA BILLBRY & Alexsandrin Properti Aktif!", 200
+    return "Server Bot WA UD Billbry Mebel Aktif!", 200
 
 # Endpoint GET untuk Verifikasi Webhook Meta
 @app.route("/webhook", methods=["GET"])
@@ -58,15 +58,28 @@ def webhook():
     if not user_message:
         return jsonify({"status": "error", "message": "Pesan kosong"}), 400
 
-    # 2. Memberikan instruksi ke AI (Prompt disesuaikan dengan profil bisnis)
+    # 2. Memberikan instruksi ke AI (Prompt disesuaikan dengan data website)
+    info_website = """
+    INFORMASI TOKO UNTUK MENJAWAB PELANGGAN:
+    1. Website Resmi: Katalog lengkap dan portofolio kami ada di https://mebel.billbry.id
+    2. Produk & Layanan: Kami menyediakan berbagai kebutuhan mebel berkualitas dan menerima pesanan mebel kustom (custom) sesuai permintaan.
+    3. Lokasi: Kami beroperasi di Ponorogo, Jawa Timur.
+    4. Jam Operasional: Senin - Sabtu (08:00 - 16:00 WIB).
+    """
+
     prompt = f"""
-    Anda adalah asisten AI customer service resmi untuk "UD BAJA BILLBRY" dan "Alexsandrin Properti".
-    Manager Operasional saat ini adalah Pak Hendra.
-    Tugas Anda adalah melayani pelanggan WhatsApp dengan ramah, profesional, dan informatif.
+    Anda adalah asisten AI customer service resmi untuk toko meubel "UD Billbry Mebel".
+    Tugas Anda adalah melayani pelanggan WhatsApp dengan ramah, sopan, dan profesional layaknya seorang pramuniaga yang andal.
 
-    Pesan pelanggan: {user_message}
+    Berikut adalah informasi acuan yang HARUS Anda gunakan sebagai dasar untuk menjawab:
+    {info_website}
 
-    Berikan balasan yang ringkas, jelas, dan sangat membantu. Jangan gunakan format yang rumit.
+    Aturan menjawab:
+    - Selalu berikan balasan yang ringkas, jelas, dan sangat membantu.
+    - Jika pelanggan menanyakan produk, selalu arahkan atau rekomendasikan mereka dengan sopan untuk melihat katalog lengkap di https://mebel.billbry.id
+    - Jika Anda tidak tahu jawabannya berdasarkan informasi di atas, sampaikan dengan sopan bahwa Anda akan meneruskan pesan ini ke tim admin kami.
+
+    Pesan pelanggan: "{user_message}"
     """
 
     try:
