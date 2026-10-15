@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: wa-gemini-odoo-billbry
+    env: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ODOO_URL
+        value: https://borsumur.billbry.id
+      - key: ODOO_DB
+        value: billbry
