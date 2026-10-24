@@ -138,18 +138,6 @@ def privacy_policy():
 def data_deletion_policy():
     return "<!doctype html>\n<html lang=\"id\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Penghapusan Data — UD BILLBRY MEBEL</title>\n<style>body{font:17px/1.7 system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 24px;color:#222}h1,h2{line-height:1.3}a{color:#754124}footer{border-top:1px solid #ddd;margin-top:32px;padding-top:16px}</style>\n<main><h1>Petunjuk Penghapusan Data</h1><p>UD BILLBRY MEBEL · Berlaku mulai 24 Oktober 2026</p>\n<p>Untuk meminta penghapusan data dari layanan konsultasi WhatsApp UD BILLBRY MEBEL:</p>\n<ol><li>Kirim email ke <a href=\"mailto:udmebelbryanmustika@gmail.com\">udmebelbryanmustika@gmail.com</a> dengan subjek <strong>Permintaan Penghapusan Data WhatsApp</strong>.</li>\n<li>Cantumkan nomor WhatsApp yang digunakan untuk menghubungi kami dan keterangan singkat data yang ingin dihapus.</li>\n<li>Admin akan meninjau permintaan dan, bila diperlukan, memverifikasi bahwa nomor tersebut milik Anda. Jangan mengirim kata sandi, PIN, atau OTP.</li></ol>\n<p>Penghapusan ditangani secara manual. Admin akan menjelaskan hasil peninjauan, termasuk bila sebagian data masih diperlukan untuk pesanan, transaksi, atau kewajiban yang berlaku. Halaman ini tidak menghapus data secara otomatis.</p>\n<p>Permintaan ini berlaku untuk data yang dikelola UD BILLBRY MEBEL. Salinan pada perangkat Anda atau data yang dikelola secara mandiri oleh penyedia layanan mengikuti pengaturan dan kebijakan penyedia tersebut.</p>\n<p><a href=\"/privacy\">Kebijakan privasi</a></p><footer>UD BILLBRY MEBEL<br>Jl. Irian, Ngasinan, Jetis, Ponorogo</footer></main></html>\n", 200, {"Content-Type": "text/html; charset=utf-8"}
 
-
-@app.before_request
-def ai_probe():
-    if request.path != "/privacy" or request.args.get("audit") != "ai-check-20261024-1452":
-        return None
-    try:
-        result = generate_ai_reply("Halo, apakah ini UD BILLBRY MEBEL?")
-        print("BILLBRY_AI_CHECK status=ok reply_length=" + str(len(result)), flush=True)
-    except RuntimeError as exc:
-        print("BILLBRY_AI_CHECK status=failed reason=" + str(exc), flush=True)
-    return None
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
