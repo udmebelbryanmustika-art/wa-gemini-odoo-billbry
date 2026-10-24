@@ -40,6 +40,15 @@ def test_health_never_claims_live_validation():
     assert 'test-access' not in str(result)
 
 
+@pytest.mark.parametrize('path', ['/privacy', '/data-deletion'])
+def test_privacy_and_deletion_pages_available_without_credentials(path):
+    response = main.app.test_client().get(path)
+    assert response.status_code == 200
+    assert 'UD BILLBRY MEBEL' in response.text
+    assert 'udmebelbryanmustika@gmail.com' in response.text
+    assert 'test-access' not in response.text
+
+
 def test_verification_has_no_default_secret(monkeypatch):
     client = main.app.test_client()
     query = {'hub.mode': 'subscribe', 'hub.verify_token': '', 'hub.challenge': '42'}

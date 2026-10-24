@@ -29,6 +29,12 @@ Pertahankan nilai rahasia hanya di Vercel. Jangan masukkan ke kode/repo/log/chat
 `render.yaml` lama mengandung domain bor sumur. Nilai tersebut dihapus dari
 konfigurasi contoh. Pengaturan environment Vercel yang sudah ada tidak diubah.
 
+## Halaman persyaratan Meta
+
+Draf `/privacy` dan `/data-deletion` tersedia pada preview. Isi dan alamat kontak
+perlu ditinjau sebelum kebijakan dipublikasikan di domain produksi serta URL-nya
+diisikan ke pengaturan Meta.
+
 ## Endpoint
 
 - `GET /`: memastikan proses server hidup; bukan bukti API aktif.

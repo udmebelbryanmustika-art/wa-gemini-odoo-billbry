@@ -6,7 +6,7 @@ import logging
 import os
 
 import requests
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024
@@ -132,6 +132,16 @@ def health():
     missing = [key for key in required if not env(key)]
     return jsonify(status='configured' if not missing else 'configuration_required',
                    missing=missing, live_api_validated=False)
+
+
+@app.get('/privacy')
+def privacy():
+    return render_template('privacy.html')
+
+
+@app.get('/data-deletion')
+def data_deletion():
+    return render_template('data-deletion.html')
 
 
 @app.get('/admin/meta-status')
