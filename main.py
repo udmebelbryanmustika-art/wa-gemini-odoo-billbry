@@ -50,7 +50,8 @@ def generate_ai_reply(text):
         if not reply:
             raise RuntimeError("gemini_empty_reply")
         return reply[:4000]
-    except (requests.RequestException, ValueError, TypeError, IndexError, AttributeError):
+    except (requests.RequestException, ValueError, TypeError, IndexError, AttributeError) as exc:
+        log.error("gemini_transport_or_response_error exception_type=%s", type(exc).__name__)
         raise RuntimeError("gemini_transport_or_response_error") from None
 
 
@@ -144,9 +145,17 @@ def ai_probe():
     if request.path != "/privacy" or request.args.get("audit") != "ai-check-20261024-1444":
         return None
     try:
+        check = requests.get("https://generativelanguage.googleapis.com/v1beta/models",
+            headers={"x-goog-api-key": GEMINI_API_KEY or ""}, timeout=(5, 10))
+        print("BILLBRY_AI_MODELS http_status=" + str(check.status_code), flush=True)
+        if check.ok:
+            names = [row.get("name") for row in check.json().get("models", [])
+                     if "generateContent" in row.get("supportedGenerationMethods", [])
+                     and "flash" in row.get("name", "")]
+            print("BILLBRY_AI_MODELS available=" + repr(names), flush=True)
         result = generate_ai_reply("Halo, apakah ini UD BILLBRY MEBEL?")
         print("BILLBRY_AI_CHECK status=ok reply_length=" + str(len(result)), flush=True)
-    except RuntimeError as exc:
+    except Exception as exc:
         print("BILLBRY_AI_CHECK status=failed reason=" + str(exc), flush=True)
     return None
 
