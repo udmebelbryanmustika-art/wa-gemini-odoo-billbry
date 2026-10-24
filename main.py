@@ -1,7 +1,6 @@
 import os
 import requests
 import logging
-import re
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -23,36 +22,25 @@ SYSTEM_INSTRUCTION = (
 )
 
 def generate_ai_reply(text):
-    if not GEMINI_API_KEY:
-        raise RuntimeError("gemini_key_missing")
-    model_name = GEMINI_MODEL.removeprefix("models/")
-    if not re.fullmatch(r"[A-Za-z0-9._-]+", model_name):
-        raise RuntimeError("gemini_model_invalid")
+    from gemini_client import generate_reply
+    return generate_reply(text, api_key=GEMINI_API_KEY, model=GEMINI_MODEL,
+                          instruction=SYSTEM_INSTRUCTION,
+                          fallback_model=os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash-lite"))
+
+
+@app.post("/admin/gemini-test")
+def gemini_test():
+    # Fixed synthetic input only; never sends a WhatsApp message or writes CRM.
+    import hmac
+    token = os.getenv("DIAGNOSTIC_TOKEN", "").strip()
+    if not token or not hmac.compare_digest(request.headers.get("Authorization", ""),
+                                            "Bearer " + token):
+        return jsonify(error="unauthorized"), 401
     try:
-        response = requests.post(
-            "https://generativelanguage.googleapis.com/v1beta/models/" + model_name + ":generateContent",
-            headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"},
-            json={
-                "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
-                "contents": [{"role": "user", "parts": [{"text": text[:12000]}]}],
-                "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.4},
-            },
-            timeout=(5, 25),
-        )
-        if not response.ok:
-            log.error("gemini_generation_failed http_status=%s", response.status_code)
-            raise RuntimeError("gemini_http_" + str(response.status_code))
-        data = response.json()
-        candidates = data.get("candidates", [])
-        parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
-        reply = "".join(part.get("text", "") for part in parts
-                        if isinstance(part, dict) and not part.get("thought")).strip()
-        if not reply:
-            raise RuntimeError("gemini_empty_reply")
-        return reply[:4000]
-    except (requests.RequestException, ValueError, TypeError, IndexError, AttributeError) as exc:
-        log.error("gemini_transport_or_response_error exception_type=%s", type(exc).__name__)
-        raise RuntimeError("gemini_transport_or_response_error") from None
+        reply = generate_ai_reply("Halo, apakah menerima pembuatan meja custom?")
+        return jsonify(status="ok", reply=reply), 200
+    except RuntimeError as exc:
+        return jsonify(status="failed", error=str(exc)), 502
 
 
 # Konfigurasi WhatsApp API Meta
