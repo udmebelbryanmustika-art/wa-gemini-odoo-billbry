@@ -116,6 +116,53 @@ def privacy_policy():
 def data_deletion_policy():
     return "<!doctype html>\n<html lang=\"id\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Penghapusan Data — UD BILLBRY MEBEL</title>\n<style>body{font:17px/1.7 system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 24px;color:#222}h1,h2{line-height:1.3}a{color:#754124}footer{border-top:1px solid #ddd;margin-top:32px;padding-top:16px}</style>\n<main><h1>Petunjuk Penghapusan Data</h1><p>UD BILLBRY MEBEL · Berlaku mulai 24 Oktober 2026</p>\n<p>Untuk meminta penghapusan data dari layanan konsultasi WhatsApp UD BILLBRY MEBEL:</p>\n<ol><li>Kirim email ke <a href=\"mailto:udmebelbryanmustika@gmail.com\">udmebelbryanmustika@gmail.com</a> dengan subjek <strong>Permintaan Penghapusan Data WhatsApp</strong>.</li>\n<li>Cantumkan nomor WhatsApp yang digunakan untuk menghubungi kami dan keterangan singkat data yang ingin dihapus.</li>\n<li>Admin akan meninjau permintaan dan, bila diperlukan, memverifikasi bahwa nomor tersebut milik Anda. Jangan mengirim kata sandi, PIN, atau OTP.</li></ol>\n<p>Penghapusan ditangani secara manual. Admin akan menjelaskan hasil peninjauan, termasuk bila sebagian data masih diperlukan untuk pesanan, transaksi, atau kewajiban yang berlaku. Halaman ini tidak menghapus data secara otomatis.</p>\n<p>Permintaan ini berlaku untuk data yang dikelola UD BILLBRY MEBEL. Salinan pada perangkat Anda atau data yang dikelola secara mandiri oleh penyedia layanan mengikuti pengaturan dan kebijakan penyedia tersebut.</p>\n<p><a href=\"/privacy\">Kebijakan privasi</a></p><footer>UD BILLBRY MEBEL<br>Jl. Irian, Ngasinan, Jetis, Ponorogo</footer></main></html>\n", 200, {"Content-Type": "text/html; charset=utf-8"}
 
+
+# Temporary read-only registration audit; never logs credentials or customer messages.
+@app.before_request
+def registration_audit():
+    if request.path != "/privacy" or request.args.get("audit") != "registration-20261024-1361790767020113":
+        return None
+    import json
+    token = os.getenv("META_ACCESS_TOKEN", "").strip()
+    phone = os.getenv("META_PHONE_ID", "").strip()
+    report = {"phone_matches_expected": phone == "1361790767020113", "token_configured": bool(token)}
+    if not token or phone != "1361790767020113":
+        print("META_REGISTRATION_AUDIT " + json.dumps(report), flush=True)
+        return None
+    checks = [
+        ("phone", phone, {"fields": "id,display_phone_number,code_verification_status,platform_type,status"}),
+        ("waba_numbers", "868625089610759/phone_numbers", {"fields": "id,display_phone_number,code_verification_status,platform_type,status"}),
+        ("subscribed_apps", "868625089610759/subscribed_apps", {}),
+    ]
+    for label, path, params in checks:
+        try:
+            resp = requests.get("https://graph.facebook.com/v26.0/" + path,
+                headers={"Authorization": "Bearer " + token}, params=params, timeout=(5, 10))
+            data = resp.json()
+            item = {"http_status": resp.status_code}
+            error = data.get("error", {}) if isinstance(data, dict) else {}
+            if error:
+                item["error_code"] = error.get("code")
+                item["error_subcode"] = error.get("error_subcode")
+            else:
+                rows = data.get("data", [data]) if isinstance(data, dict) else []
+                safe_rows = []
+                for row in rows:
+                    if not isinstance(row, dict):
+                        continue
+                    if label == "subscribed_apps":
+                        details = row.get("whatsapp_business_api_data", {})
+                        safe_rows.append({"app_id": details.get("id") if isinstance(details, dict) else None})
+                    else:
+                        safe_rows.append({key: row.get(key) for key in
+                            ("id", "display_phone_number", "code_verification_status", "platform_type", "status")})
+                item["data"] = safe_rows
+            report[label] = item
+        except Exception:
+            report[label] = {"error": "transport_or_json_error"}
+    print("META_REGISTRATION_AUDIT " + json.dumps(report), flush=True)
+    return None
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
