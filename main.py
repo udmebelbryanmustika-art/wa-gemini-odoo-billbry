@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 # Konfigurasi Gemini API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 log = logging.getLogger(__name__)
 
 SYSTEM_INSTRUCTION = (
@@ -139,23 +139,14 @@ def data_deletion_policy():
     return "<!doctype html>\n<html lang=\"id\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Penghapusan Data — UD BILLBRY MEBEL</title>\n<style>body{font:17px/1.7 system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 24px;color:#222}h1,h2{line-height:1.3}a{color:#754124}footer{border-top:1px solid #ddd;margin-top:32px;padding-top:16px}</style>\n<main><h1>Petunjuk Penghapusan Data</h1><p>UD BILLBRY MEBEL · Berlaku mulai 24 Oktober 2026</p>\n<p>Untuk meminta penghapusan data dari layanan konsultasi WhatsApp UD BILLBRY MEBEL:</p>\n<ol><li>Kirim email ke <a href=\"mailto:udmebelbryanmustika@gmail.com\">udmebelbryanmustika@gmail.com</a> dengan subjek <strong>Permintaan Penghapusan Data WhatsApp</strong>.</li>\n<li>Cantumkan nomor WhatsApp yang digunakan untuk menghubungi kami dan keterangan singkat data yang ingin dihapus.</li>\n<li>Admin akan meninjau permintaan dan, bila diperlukan, memverifikasi bahwa nomor tersebut milik Anda. Jangan mengirim kata sandi, PIN, atau OTP.</li></ol>\n<p>Penghapusan ditangani secara manual. Admin akan menjelaskan hasil peninjauan, termasuk bila sebagian data masih diperlukan untuk pesanan, transaksi, atau kewajiban yang berlaku. Halaman ini tidak menghapus data secara otomatis.</p>\n<p>Permintaan ini berlaku untuk data yang dikelola UD BILLBRY MEBEL. Salinan pada perangkat Anda atau data yang dikelola secara mandiri oleh penyedia layanan mengikuti pengaturan dan kebijakan penyedia tersebut.</p>\n<p><a href=\"/privacy\">Kebijakan privasi</a></p><footer>UD BILLBRY MEBEL<br>Jl. Irian, Ngasinan, Jetis, Ponorogo</footer></main></html>\n", 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
-# Temporary fixed-input AI probe. Never sends a WhatsApp message or reads customer data.
 @app.before_request
 def ai_probe():
-    if request.path != "/privacy" or request.args.get("audit") != "ai-check-20261024-1444":
+    if request.path != "/privacy" or request.args.get("audit") != "ai-check-20261024-1452":
         return None
     try:
-        check = requests.get("https://generativelanguage.googleapis.com/v1beta/models",
-            headers={"x-goog-api-key": GEMINI_API_KEY or ""}, timeout=(5, 10))
-        print("BILLBRY_AI_MODELS http_status=" + str(check.status_code), flush=True)
-        if check.ok:
-            names = [row.get("name") for row in check.json().get("models", [])
-                     if "generateContent" in row.get("supportedGenerationMethods", [])
-                     and "flash" in row.get("name", "")]
-            print("BILLBRY_AI_MODELS available=" + repr(names), flush=True)
         result = generate_ai_reply("Halo, apakah ini UD BILLBRY MEBEL?")
         print("BILLBRY_AI_CHECK status=ok reply_length=" + str(len(result)), flush=True)
-    except Exception as exc:
+    except RuntimeError as exc:
         print("BILLBRY_AI_CHECK status=failed reason=" + str(exc), flush=True)
     return None
 
