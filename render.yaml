@@ -10,6 +10,6 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: ODOO_URL
-        value: https://borsumur.billbry.id
+        sync: false
       - key: ODOO_DB
-        value: billbry
+        sync: false
