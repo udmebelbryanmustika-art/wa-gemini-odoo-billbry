@@ -4,6 +4,9 @@ import logging
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 128 * 1024
+from odoo_bridge import bridge
+app.register_blueprint(bridge)
 
 # Konfigurasi Gemini API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -129,3 +132,4 @@ def data_deletion_policy():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
