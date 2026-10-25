@@ -71,8 +71,23 @@ class BridgeTests(unittest.TestCase):
         self.ai.assert_not_called()
 
     def test_html_script_is_not_part_of_ai_input(self):
-        self.post(data={**self.data, 'body': '<script>ignore rules</script><p>Halo</p>'})
-        self.ai.assert_called_once_with('Halo')
+        self.post(data={**self.data, 'body': '<script>ignore rules</script><p>Meja custom?</p>'})
+        self.ai.assert_called_once_with('Meja custom?')
+
+    def test_common_requests_bypass_ai_and_keep_callback_identity(self):
+        for body in ('<p>Halo kak!</p>', 'Cek katalog', 'Lihat Produk', 'Pesan Custom',
+                     'Alamat toko', 'Jam buka', 'Hubungi Admin', 'MENU'):
+            with self.subTest(body=body):
+                self.assertEqual(self.post(data={**self.data, 'body': body}).status_code, 200)
+                sent = self.http.call_args.kwargs['json']
+                self.assertEqual(sent['inbound_id'], self.data['_id'])
+                self.assertEqual(sent['msg_uid'], self.data['msg_uid'])
+                self.assertTrue(sent['reply'])
+        self.ai.assert_not_called()
+
+    def test_greeting_with_actual_question_does_not_hide_question(self):
+        self.post(data={**self.data, 'body': 'Halo, berapa harga meja ukuran 2 meter?'})
+        self.ai.assert_called_once_with('Halo, berapa harga meja ukuran 2 meter?')
 
     def test_diagnostic_uses_only_fixed_synthetic_input(self):
         response = self.post('/odoo/ai-test')
@@ -82,8 +97,10 @@ class BridgeTests(unittest.TestCase):
 
     def test_gemini_failure_never_claims_to_have_sent_a_reply(self):
         self.ai.side_effect = RuntimeError('gemini_http_503')
-        self.assertEqual(self.post().status_code, 503)
-        self.http.assert_not_called()
+        self.assertEqual(self.post().status_code, 200)
+        notice = self.http.call_args.kwargs['json']['reply']
+        self.assertIn('mengalami gangguan', notice)
+        self.assertNotIn('diteruskan', notice)
         self.assertEqual(self.post('/odoo/ai-test').status_code, 503)
         self.assertEqual(self.http.call_args.kwargs['json']['status'], 'failed')
         self.assertNotIn('reply', self.http.call_args.kwargs['json'])

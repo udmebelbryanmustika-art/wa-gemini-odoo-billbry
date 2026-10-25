@@ -7,6 +7,7 @@ import hmac
 import logging
 import os
 import re
+from time import perf_counter
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
@@ -16,6 +17,34 @@ from flask import Blueprint, jsonify, request
 
 bridge = Blueprint('odoo_bridge', __name__)
 log = logging.getLogger(__name__)
+
+
+def instant_reply(text):
+    """Only exact, simple requests bypass AI; mixed questions retain AI handling."""
+    key = ' '.join(re.sub(r'[^\w\s]', '', text.casefold()).split())
+    if key in {'halo', 'hallo', 'hai', 'hi', 'hello', 'halo kak', 'hallo kak',
+               'hai kak', 'assalamualaikum', 'selamat pagi', 'selamat siang',
+               'selamat sore', 'selamat malam', 'menu', 'menu utama'}:
+        return ('Halo! Selamat datang di UD BILLBRY MEBEL. Silakan pilih kebutuhan Anda: '
+                'Lihat Produk, Pesan Custom, atau Hubungi Admin. Anda juga bisa langsung '
+                'mengetik pertanyaan tentang furnitur, kayu, atau jasa CNC.')
+    if key in {'katalog', 'cek katalog', 'lihat katalog', 'minta katalog',
+               'lihat produk', 'foto produk'}:
+        return ('Silakan lihat produk UD BILLBRY MEBEL di https://mebel.billbry.id/. '
+                'Kirim nama atau foto produk yang diminati. Harga dan ketersediaan '
+                'perlu dikonfirmasi kepada admin.')
+    if key in {'pesan custom', 'furniture custom', 'furnitur custom'}:
+        return ('Kami menerima furnitur custom. Silakan kirim jenis furnitur, ukuran, '
+                'jumlah, serta foto referensi bila ada. Harga dan estimasi pengerjaan '
+                'akan dikonfirmasi oleh admin.')
+    if key in {'alamat', 'alamat toko', 'lokasi', 'lokasi toko'}:
+        return 'Alamat UD BILLBRY MEBEL: Jl. Irian, Ngasinan, Jetis, Ponorogo.'
+    if key in {'jam buka', 'jam kerja', 'buka jam berapa'}:
+        return ('Jam kerja UD BILLBRY MEBEL: Senin–Sabtu pukul 07.00–16.00 WIB, '
+                'istirahat pukul 12.00–13.00 WIB.')
+    if key == 'hubungi admin':
+        return 'Baik, silakan tulis kebutuhan yang ingin dibantu admin UD BILLBRY MEBEL.'
+    return None
 
 
 class BridgeError(Exception):
@@ -114,6 +143,7 @@ def notify_odoo(url, payload):
 
 
 def run_bridge(*, diagnostic):
+    started = perf_counter()
     try:
         url = authorize()
     except (BridgeError, ValueError):
@@ -128,14 +158,14 @@ def run_bridge(*, diagnostic):
         return jsonify(status='ignored', reason='no_text'), 200
     # This import is deferred to avoid a circular import during Flask startup.
     from main import generate_ai_reply
+    reply = None if diagnostic else instant_reply(text)
+    source = 'instant' if reply else 'gemini'
     try:
-        reply = generate_ai_reply('Halo, apakah menerima pembuatan meja custom?'
-                                  if diagnostic else text).strip()
+        if reply is None:
+            reply = generate_ai_reply('Halo, apakah menerima pembuatan meja custom?'
+                                      if diagnostic else text).strip()
         if not reply:
             raise RuntimeError('gemini_empty_reply')
-        callback = {'kind': 'diagnostic' if diagnostic else 'reply',
-                    'inbound_id': record_id, 'msg_uid': uid,
-                    'status': 'ok', 'reply': reply[:1800]}
     except RuntimeError as exc:
         reason = str(exc)
         if not re.fullmatch(r'gemini_[a-z0-9_]+', reason):
@@ -147,7 +177,15 @@ def run_bridge(*, diagnostic):
                                  'status': 'failed', 'error': reason})
             except BridgeError:
                 return jsonify(error='diagnostic_callback_failed'), 502
-        return jsonify(error=reason), 503
+            return jsonify(error=reason), 503
+        source = 'unavailable_notice'
+        reply = ('Maaf, asisten AI sedang mengalami gangguan. Ketik "katalog" untuk '
+                 'melihat produk atau "Hubungi Admin" untuk meminta bantuan.')
+    log.info('mebel_reply_ready source=%s elapsed_ms=%s', source,
+             round((perf_counter() - started) * 1000))
+    callback = {'kind': 'diagnostic' if diagnostic else 'reply',
+                'inbound_id': record_id, 'msg_uid': uid,
+                'status': 'ok', 'reply': reply[:1800]}
     try:
         notify_odoo(url, callback)
     except BridgeError as exc:
