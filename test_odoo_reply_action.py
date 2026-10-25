@@ -22,6 +22,7 @@ class OdooReplyGuards(unittest.TestCase):
         self.wa.message_type = 'inbound'
         self.wa.msg_uid = 'wamid.test'
         self.wa.id = 363
+        self.wa.x_mebel_customer_image_done = False
         self.wa.create_date = datetime.datetime.utcnow()
         self.wa.mail_message_id.model = 'discuss.channel'
         self.wa.mail_message_id.res_id = 20
@@ -47,6 +48,29 @@ class OdooReplyGuards(unittest.TestCase):
         self.channel.message_post.assert_called_once_with(
             body='Bisa. Ukurannya berapa?', message_type='whatsapp_message', subtype_xmlid='mail.mt_comment')
         self.outgoing.write.assert_called_once_with({'parent_id': 363})
+        self.wa.write.assert_called_once_with({
+            'x_mebel_customer_image_data': False, 'x_mebel_customer_image_mime': False,
+            'x_mebel_customer_image_status': False, 'x_mebel_ai_context': False})
+
+    def test_delayed_image_can_be_analyzed_once_after_an_earlier_text_reply(self):
+        self.payload['customer_image'] = True
+        self.messages.search.side_effect = [self.outgoing, self.outgoing]
+        self.run_action()
+        self.channel.message_post.assert_called_once()
+        self.assertTrue(self.wa.write.call_args.args[0]['x_mebel_customer_image_done'])
+
+    def test_replayed_image_callback_does_not_send_twice(self):
+        self.payload['customer_image'] = True
+        self.wa.x_mebel_customer_image_done = True
+        self.messages.search.side_effect = [self.outgoing]
+        self.run_action()
+        self.channel.message_post.assert_not_called()
+
+    def test_truthy_non_boolean_image_flag_is_rejected(self):
+        self.payload['customer_image'] = 'true'
+        with self.assertRaisesRegex(UserError, 'invalid_mebel_image_flag'):
+            self.run_action()
+        self.channel.message_post.assert_not_called()
 
     def test_wrong_account_never_reaches_channel(self):
         self.wa.wa_account_id.id = 3

@@ -19,6 +19,22 @@ class GeminiLatencyTests(unittest.TestCase):
         options.update(overrides)
         return generate_reply('Meja custom?', **options)
 
+    @patch('gemini_client.requests.post')
+    def test_image_is_forwarded_inline_with_caption(self, post):
+        post.return_value = success()
+        image = {'mime_type': 'image/png', 'data': 'test-only-validated-upstream'}
+        self.generate(image=image)
+        parts = post.call_args.kwargs['json']['contents'][0]['parts']
+        self.assertEqual(parts, [{'text': 'Meja custom?'}, {'inlineData': {
+            'mimeType': 'image/png', 'data': image['data']}}])
+
+    @patch('gemini_client.requests.post')
+    def test_normal_text_has_no_image_part(self, post):
+        post.return_value = success()
+        self.generate()
+        self.assertEqual(post.call_args.kwargs['json']['contents'][0]['parts'],
+                         [{'text': 'Meja custom?'}])
+
     @patch('gemini_client.time.sleep')
     @patch('gemini_client.requests.post')
     def test_timeout_recovers_without_the_broken_fallback(self, post, sleep):

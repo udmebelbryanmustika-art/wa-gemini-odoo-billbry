@@ -16,7 +16,7 @@ def model_id(value):
     return value
 
 
-def generate_reply(text, *, api_key, model, instruction, fallback_model=''):
+def generate_reply(text, *, api_key, model, instruction, fallback_model='', image=None):
     if not api_key or not api_key.strip():
         raise RuntimeError('gemini_key_missing')
     primary = model_id(model)
@@ -28,6 +28,9 @@ def generate_reply(text, *, api_key, model, instruction, fallback_model=''):
     # At most two requests: primary, then configured fallback.
     # No automatic retry on invalid key, permission, missing model, or blocked output.
     models = [primary, fallback]
+    input_parts = [{'text': text[:20000]}]
+    if image is not None:
+        input_parts.append({'inlineData': {'mimeType': image['mime_type'], 'data': image['data']}})
     last_error = 'gemini_unavailable'
     for attempt, selected in enumerate(models):
         if attempt:
@@ -41,7 +44,7 @@ def generate_reply(text, *, api_key, model, instruction, fallback_model=''):
                 + selected + ':generateContent',
                 headers={'x-goog-api-key': api_key.strip(), 'Content-Type': 'application/json'},
                 json={'systemInstruction': {'parts': [{'text': instruction}]},
-                      'contents': [{'role': 'user', 'parts': [{'text': text[:12000]}]}],
+                      'contents': [{'role': 'user', 'parts': input_parts}],
                       'generationConfig': generation},
                 timeout=(3, 6))
         except (requests.Timeout, requests.ConnectionError):
