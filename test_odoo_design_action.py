@@ -45,7 +45,7 @@ class DesignActionTests(unittest.TestCase):
         for pid, name in [(683, 'Meja Belajar'), (682, 'Meja Kerja'), (684, 'Meja Laptop')]:
             self.catalog[pid] = SimpleNamespace(id=pid, name=name,
                 company_id=SimpleNamespace(id=6), website_id=SimpleNamespace(id=7),
-                website_published=True, image_1024='test-base64', website_url='/shop/model-' + str(pid))
+                website_published=True, image_1024=SimpleNamespace(size=123), website_url='/shop/model-' + str(pid))
         self.products.browse.side_effect = lambda pid: SimpleNamespace(exists=lambda: self.catalog.get(pid))
         self.attachments = MagicMock()
         self.attachments.with_user.return_value = self.attachments
@@ -65,6 +65,8 @@ class DesignActionTests(unittest.TestCase):
     def test_images_are_real_attachments_numbered_and_labelled(self):
         self.run_action()
         self.assertEqual(self.attachments.create.call_count, 3)
+        self.assertIs(self.attachments.create.call_args_list[0].args[0]['raw'],
+                      self.catalog[683].image_1024)
         self.assertEqual(self.channel.message_post.call_count, 4)
         posts = self.channel.message_post.call_args_list
         for i, post in enumerate(posts[:3], 1):
