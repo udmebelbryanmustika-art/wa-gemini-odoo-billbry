@@ -15,14 +15,19 @@ def plain_text(value):
 
 
 def design_request(text):
-    if any(word in text for word in ['jangan kirim', 'tidak perlu gambar', 'tanpa gambar',
-                                    'bukti transfer', 'komplain', 'rusak', 'refund', 'retur']):
-        return False
-    media = any(word in text for word in ['gambar', 'foto', 'desain', 'referensi',
-                                         'contoh', 'katalog', 'lihat produk'])
-    request = any(word in text for word in ['minta', 'lihat', 'kirim', 'kasih', 'boleh',
-                                           'bisa', 'ada', 'referensi', 'contoh', 'carikan',
-                                           'pilihan', 'rekomendasi'])
+    for word in ['jangan kirim', 'tidak perlu gambar', 'tanpa gambar',
+                 'bukti transfer', 'komplain', 'rusak', 'refund', 'retur']:
+        if word in text:
+            return False
+    media = False
+    for word in ['gambar', 'foto', 'desain', 'referensi', 'contoh', 'katalog', 'lihat produk']:
+        if word in text:
+            media = True
+    request = False
+    for word in ['minta', 'lihat', 'kirim', 'kasih', 'boleh', 'bisa', 'ada',
+                 'referensi', 'contoh', 'carikan', 'pilihan', 'rekomendasi']:
+        if word in text:
+            request = True
     return media and (request or len(text.split()) <= 5)
 
 
@@ -49,8 +54,9 @@ def design_products(text):
         (['kabinet', 'cabinet'], [694, 678, 679]),
     ]
     for words, ids in plans:
-        if any(word in text for word in words):
-            return ids
+        for word in words:
+            if word in text:
+                return ids
     return None
 
 
@@ -114,7 +120,7 @@ for wa in records.with_user(2).with_context(allowed_company_ids=[6]):
     for product_id in products or []:
         p = P.browse(product_id).exists()
         if (p and p.company_id.id == 6 and p.website_id.id in [False, 7]
-                and p.website_published and p.image_1024 and len(p.image_1024) < 4000000
+                and p.website_published and p.image_1024 and p.image_1024.size < 3000000
                 and str(p.website_url or '').startswith('/shop/')):
             candidates.append(p)
     if selected and (selected.company_id.id != 6 or not selected.website_published
@@ -149,7 +155,7 @@ for wa in records.with_user(2).with_context(allowed_company_ids=[6]):
     for p in candidates[:3]:
         attachment = env['ir.attachment'].with_user(2).create({
             'name': 'Referensi desain - %s' % p.name,
-            'datas': p.image_1024, 'res_model': 'discuss.channel', 'res_id': channel.id})
+            'raw': p.image_1024, 'res_model': 'discuss.channel', 'res_id': channel.id})
         if attachment.mimetype not in ['image/jpeg', 'image/png']:
             continue
         caption = 'Referensi %s — %s.\nIlustrasi desain katalog, bukan foto hasil produksi atau spesifikasi final.\nSumber: https://mebel.billbry.id%s' % (len(sent_ids) + 1, p.name, p.website_url)
