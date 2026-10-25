@@ -10,6 +10,7 @@ from odoo_bridge import callback_config
 SECRET = 'test-only-' + 'x' * 40
 CALLBACK = 'https://mebel.billbry.id/web/hook/' + SECRET
 AUTH = {'Authorization': 'Basic ' + base64.b64encode(('mebel:' + SECRET).encode()).decode()}
+PNG = base64.b64encode(b'\x89PNG\r\n\x1a\n' + b'\x00' * 32).decode()
 
 
 class BridgeTests(unittest.TestCase):
@@ -122,7 +123,68 @@ class BridgeTests(unittest.TestCase):
 
     def test_request_size_and_get_methods_rejected(self):
         self.assertEqual(self.client.get('/odoo/inbound').status_code, 405)
-        self.assertEqual(self.post(data={**self.data, 'body': 'x' * 140000}).status_code, 413)
+        self.assertEqual(self.post(data={**self.data, 'body': 'x' * 140000}).status_code, 400)
+
+    def image_data(self, **values):
+        return {**self.data, 'body': '', 'x_mebel_customer_image_data': PNG,
+                'x_mebel_customer_image_mime': 'image/png',
+                'x_mebel_customer_image_status': 'image', **values}
+
+    def test_image_without_caption_is_analyzed(self):
+        self.assertEqual(self.post(data=self.image_data()).status_code, 200)
+        args = self.ai.call_args
+        self.assertIn('tanpa keterangan', args.args[0])
+        self.assertEqual(args.kwargs['image'], {'mime_type': 'image/png', 'data': PNG})
+
+    def test_false_body_is_allowed_only_for_actual_image_payload(self):
+        self.assertEqual(self.post(data=self.image_data(body=False)).status_code, 200)
+
+    def test_image_caption_overrides_the_instant_greeting(self):
+        self.post(data=self.image_data(body='<p>Halo</p>'))
+        self.ai.assert_called_once()
+        self.assertEqual(self.ai.call_args.args[0], 'Halo')
+        self.assertIn('image', self.ai.call_args.kwargs)
+
+    def test_recent_context_and_current_question_are_both_passed(self):
+        data = {**self.data, 'body': '120 x 60 cm',
+                'x_mebel_ai_context': 'Citra: Meja dengan dua laci. Ukuran yang dibutuhkan berapa?'}
+        self.post(data=data)
+        prompt = self.ai.call_args.args[0]
+        self.assertIn('Meja dengan dua laci', prompt)
+        self.assertTrue(prompt.endswith('120 x 60 cm'))
+
+    def test_invalid_images_fail_before_ai_or_callback(self):
+        for changes in ({'x_mebel_customer_image_data': 'not-base64!'},
+                        {'x_mebel_customer_image_mime': 'image/jpeg'},
+                        {'x_mebel_customer_image_data': 'https://evil.example/image.jpg'},
+                        {'x_mebel_customer_image_data': 'a' * 2000001},
+                        {'x_mebel_customer_image_mime': {}},
+                        {'x_mebel_customer_image_status': ['image']}):
+            with self.subTest(changes=changes):
+                self.assertEqual(self.post(data=self.image_data(**changes)).status_code, 400)
+        self.ai.assert_not_called()
+        self.http.assert_not_called()
+
+    def test_oversize_notice_does_not_claim_to_see_the_image(self):
+        data = {**self.data, 'body': False, 'x_mebel_customer_image_status': 'oversize'}
+        self.assertEqual(self.post(data=data).status_code, 200)
+        self.ai.assert_not_called()
+        self.assertIn('belum bisa saya baca', self.http.call_args.kwargs['json']['reply'])
+
+    def test_diagnostic_image_analysis_never_uses_customer_caption_or_history(self):
+        data = self.image_data(body='private customer caption', x_mebel_ai_context='private history')
+        self.assertEqual(self.post('/odoo/ai-test', data=data).status_code, 200)
+        self.assertNotIn('private', self.ai.call_args.args[0])
+        self.assertIn('fitur furnitur', self.ai.call_args.args[0])
+        self.assertEqual(self.http.call_args.kwargs['json']['kind'], 'diagnostic')
+
+    def test_visual_failure_returns_a_truthful_notice(self):
+        self.ai.side_effect = RuntimeError('gemini_http_503')
+        self.assertEqual(self.post(data=self.image_data()).status_code, 200)
+        self.assertIn('belum berhasil saya baca', self.http.call_args.kwargs['json']['reply'])
+
+    def test_actual_request_limit_covers_bounded_photo_but_rejects_huge_body(self):
+        self.assertEqual(self.post(data={**self.data, 'body': 'x' * 4000000}).status_code, 413)
 
 
 if __name__ == '__main__':
