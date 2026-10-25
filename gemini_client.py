@@ -46,7 +46,7 @@ def generate_reply(text, *, api_key, model, instruction, fallback_model='', imag
                 json={'systemInstruction': {'parts': [{'text': instruction}]},
                       'contents': [{'role': 'user', 'parts': input_parts}],
                       'generationConfig': generation},
-                timeout=(3, 6))
+                timeout=(3, 12 if image is not None else 6))
         except (requests.Timeout, requests.ConnectionError):
             last_error = 'gemini_transport_error'
             log.warning('gemini_attempt_failed attempt=%s reason=transport', attempt + 1)
