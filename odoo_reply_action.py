@@ -15,7 +15,7 @@ elif kind == 'reply':
         raise UserError('mebel_message_mismatch')
     text = payload.get('reply')
     image_reply = payload.get('customer_image', False)
-    if type(image_reply) != bool:
+    if not isinstance(image_reply, bool):
         raise UserError('invalid_mebel_image_flag')
     if not isinstance(text, str) or not text.strip() or len(text) > 1800:
         raise UserError('invalid_mebel_reply')

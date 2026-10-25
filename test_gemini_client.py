@@ -24,6 +24,7 @@ class GeminiLatencyTests(unittest.TestCase):
         post.return_value = success()
         image = {'mime_type': 'image/png', 'data': 'test-only-validated-upstream'}
         self.generate(image=image)
+        self.assertEqual(post.call_args.kwargs['timeout'], (3, 12))
         parts = post.call_args.kwargs['json']['contents'][0]['parts']
         self.assertEqual(parts, [{'text': 'Meja custom?'}, {'inlineData': {
             'mimeType': 'image/png', 'data': image['data']}}])
