@@ -28,7 +28,7 @@ def generate_ai_reply(text):
     from gemini_client import generate_reply
     return generate_reply(text, api_key=GEMINI_API_KEY, model=GEMINI_MODEL,
                           instruction=SYSTEM_INSTRUCTION,
-                          fallback_model=os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash-lite"))
+                          fallback_model=os.getenv("GEMINI_FALLBACK_MODEL", GEMINI_MODEL))
 
 
 @app.post("/admin/gemini-test")
