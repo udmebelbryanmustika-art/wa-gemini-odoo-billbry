@@ -39,7 +39,7 @@ class OdooReplyGuards(unittest.TestCase):
         self.payload = {'kind': 'reply', 'inbound_id': 363, 'msg_uid': 'wamid.test', 'reply': 'Bisa. Ukurannya berapa?'}
 
     def run_action(self):
-        exec(CODE, {'env': self.env, 'records': self.wa, 'payload': self.payload,
+        exec(CODE, {'__builtins__': {key: value for key, value in vars(__import__('builtins')).items() if key != 'type'}, 'env': self.env, 'records': self.wa, 'payload': self.payload,
                     'datetime': datetime, 'UserError': UserError, 'log': self.logs})
 
     def test_valid_reply_uses_original_channel_and_links_parent(self):
