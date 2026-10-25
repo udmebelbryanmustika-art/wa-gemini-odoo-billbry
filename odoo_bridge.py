@@ -25,25 +25,30 @@ def instant_reply(text):
     if key in {'halo', 'hallo', 'hai', 'hi', 'hello', 'halo kak', 'hallo kak',
                'hai kak', 'assalamualaikum', 'selamat pagi', 'selamat siang',
                'selamat sore', 'selamat malam', 'menu', 'menu utama'}:
-        return ('Halo! Selamat datang di UD BILLBRY MEBEL. Silakan pilih kebutuhan Anda: '
-                'Lihat Produk, Pesan Custom, atau Hubungi Admin. Anda juga bisa langsung '
-                'mengetik pertanyaan tentang furnitur, kayu, atau jasa CNC.')
+        return ('Halo, Kak! Saya Citra, asisten virtual UD BILLBRY MEBEL. '
+                'Kami bantu kebutuhan furnitur custom, kayu, dan jasa CNC. '
+                'Kakak sedang mencari furnitur apa atau ingin konsultasi jasa CNC?')
     if key in {'katalog', 'cek katalog', 'lihat katalog', 'minta katalog',
                'lihat produk', 'foto produk'}:
-        return ('Silakan lihat produk UD BILLBRY MEBEL di https://mebel.billbry.id/. '
-                'Kirim nama atau foto produk yang diminati. Harga dan ketersediaan '
-                'perlu dikonfirmasi kepada admin.')
+        return ('Boleh, Kak. Referensi produk kami ada di https://mebel.billbry.id/. '
+                'Kalau ada model yang disukai, kirim nama atau fotonya, ya, supaya '
+                'bisa dibantu menyesuaikan kebutuhan. Kakak sedang mencari meja, '
+                'kursi, lemari, atau furnitur lainnya?')
     if key in {'pesan custom', 'furniture custom', 'furnitur custom'}:
-        return ('Kami menerima furnitur custom. Silakan kirim jenis furnitur, ukuran, '
-                'jumlah, serta foto referensi bila ada. Harga dan estimasi pengerjaan '
-                'akan dikonfirmasi oleh admin.')
+        return ('Bisa, Kak. Furnitur custom bisa direncanakan mengikuti kebutuhan '
+                'dan ukuran ruang Kakak. Mau dibuatkan furnitur apa dulu? '
+                'Kalau punya foto referensi, boleh sekalian dikirim, ya.')
     if key in {'alamat', 'alamat toko', 'lokasi', 'lokasi toko'}:
-        return 'Alamat UD BILLBRY MEBEL: Jl. Irian, Ngasinan, Jetis, Ponorogo.'
+        return ('Kami di Jl. Irian, Ngasinan, Jetis, Ponorogo, Kak. '
+                'Kakak ingin berkunjung atau konsultasi kebutuhan furniturnya lewat chat dulu?')
     if key in {'jam buka', 'jam kerja', 'buka jam berapa'}:
-        return ('Jam kerja UD BILLBRY MEBEL: Senin–Sabtu pukul 07.00–16.00 WIB, '
-                'istirahat pukul 12.00–13.00 WIB.')
+        return ('Jam kerja kami Senin–Sabtu, pukul 07.00–16.00 WIB, Kak; '
+                'istirahat pukul 12.00–13.00 WIB. '
+                'Ada kebutuhan furnitur atau jasa CNC yang ingin dikonsultasikan?')
     if key == 'hubungi admin':
-        return 'Baik, silakan tulis kebutuhan yang ingin dibantu admin UD BILLBRY MEBEL.'
+        return ('Baik, Kak. Agar admin bisa membantu dengan tepat, '
+                'boleh tuliskan hal utama yang ingin dibahas? '
+                'Misalnya penawaran harga, pesanan custom, atau konsultasi produk.')
     return None
 
 
