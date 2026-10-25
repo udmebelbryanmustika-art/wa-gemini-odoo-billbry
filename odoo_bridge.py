@@ -25,7 +25,7 @@ def instant_reply(text):
     if key in {'halo', 'hallo', 'hai', 'hi', 'hello', 'halo kak', 'hallo kak',
                'hai kak', 'assalamualaikum', 'selamat pagi', 'selamat siang',
                'selamat sore', 'selamat malam', 'menu', 'menu utama'}:
-        return ('Halo, Kak! Saya Citra, asisten virtual UD BILLBRY MEBEL. '
+        return ('Halo, Kak! Saya Citra dari UD BILLBRY MEBEL. '
                 'Kami bantu kebutuhan furnitur custom, kayu, dan jasa CNC. '
                 'Kakak sedang mencari furnitur apa atau ingin konsultasi jasa CNC?')
     if key in {'katalog', 'cek katalog', 'lihat katalog', 'minta katalog',
