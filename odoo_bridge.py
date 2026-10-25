@@ -1,0 +1,168 @@
+"""Authenticated, account-scoped Odoo -> Gemini -> Odoo bridge.
+
+Odoo keeps the Meta callback and remains the sole WhatsApp sender.  No Meta
+access token or general Odoo API key is used by these routes.
+"""
+import hmac
+import logging
+import os
+import re
+from datetime import datetime, timezone
+from html.parser import HTMLParser
+from urllib.parse import urlsplit
+
+import requests
+from flask import Blueprint, jsonify, request
+
+bridge = Blueprint('odoo_bridge', __name__)
+log = logging.getLogger(__name__)
+
+
+class BridgeError(Exception):
+    pass
+
+
+def callback_config():
+    url = os.getenv('ODOO_REPLY_WEBHOOK_URL', '').strip()
+    parsed = urlsplit(url)
+    if (parsed.scheme != 'https' or parsed.netloc != 'mebel.billbry.id'
+            or parsed.query or parsed.fragment
+            or not re.fullmatch(r'/web/hook/[A-Za-z0-9_-]{32,128}', parsed.path)):
+        raise BridgeError('odoo_reply_configuration_required')
+    return url, parsed.path.rsplit('/', 1)[-1]
+
+
+def authorize():
+    url, secret = callback_config()
+    auth = request.authorization
+    if (not auth or auth.type.lower() != 'basic' or auth.username != 'mebel'
+            or not isinstance(auth.password, str)
+            or not hmac.compare_digest(auth.password.encode('utf-8'), secret.encode('ascii'))):
+        return None
+    return url
+
+
+class PlainText(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.hidden = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {'script', 'style'}:
+            self.hidden += 1
+        elif tag in {'p', 'div', 'br', 'li'} and not self.hidden:
+            self.parts.append('\n')
+
+    def handle_endtag(self, tag):
+        if tag in {'script', 'style'}:
+            self.hidden = max(0, self.hidden - 1)
+        elif tag in {'p', 'div', 'li'} and not self.hidden:
+            self.parts.append('\n')
+
+    def handle_data(self, data):
+        if not self.hidden:
+            self.parts.append(data)
+
+
+def inbound(payload, *, diagnostic=False):
+    if not isinstance(payload, dict):
+        raise BridgeError('invalid_payload')
+    account = payload.get('wa_account_id')
+    if isinstance(account, list) and len(account) == 2:
+        account = account[0]
+    if (payload.get('_model') != 'whatsapp.message' or account != 9
+            or payload.get('message_type') != 'inbound'):
+        raise BridgeError('wrong_whatsapp_account')
+    record_id = payload.get('_id')
+    uid = payload.get('msg_uid')
+    if (type(record_id) is not int or record_id < 1 or not isinstance(uid, str)
+            or not uid or len(uid) > 512):
+        raise BridgeError('invalid_message_identity')
+    if diagnostic:
+        return record_id, uid, ''
+    try:
+        created = datetime.fromisoformat(payload['create_date'].replace('Z', '+00:00'))
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - created).total_seconds()
+    except (KeyError, TypeError, ValueError, AttributeError):
+        raise BridgeError('invalid_message_date') from None
+    if not -60 <= age < 82800:
+        raise BridgeError('message_outside_reply_window')
+    body = payload.get('body')
+    if not isinstance(body, str) or len(body) > 24000:
+        raise BridgeError('invalid_message_body')
+    parser = PlainText()
+    parser.feed(body)
+    text = '\n'.join(line.strip() for line in ''.join(parser.parts).splitlines()
+                     if line.strip())[:12000]
+    return record_id, uid, text
+
+
+def notify_odoo(url, payload):
+    try:
+        response = requests.post(url, json=payload, timeout=(3, 15), allow_redirects=False)
+        if not 200 <= response.status_code < 300:
+            raise BridgeError('odoo_reply_rejected')
+        result = response.json()
+        if (not isinstance(result, dict) or result.get('error')
+                or result.get('status') in {'error', 'failed'}):
+            raise BridgeError('odoo_reply_rejected')
+    except (requests.RequestException, ValueError):
+        raise BridgeError('odoo_reply_transport_error') from None
+
+
+def run_bridge(*, diagnostic):
+    try:
+        url = authorize()
+    except (BridgeError, ValueError):
+        return jsonify(error='odoo_reply_configuration_required'), 503
+    if url is None:
+        return jsonify(error='unauthorized'), 401
+    try:
+        record_id, uid, text = inbound(request.get_json(silent=True), diagnostic=diagnostic)
+    except BridgeError as exc:
+        return jsonify(error=str(exc)), 400
+    if not diagnostic and not text:
+        return jsonify(status='ignored', reason='no_text'), 200
+    # This import is deferred to avoid a circular import during Flask startup.
+    from main import generate_ai_reply
+    try:
+        reply = generate_ai_reply('Halo, apakah menerima pembuatan meja custom?'
+                                  if diagnostic else text).strip()
+        if not reply:
+            raise RuntimeError('gemini_empty_reply')
+        callback = {'kind': 'diagnostic' if diagnostic else 'reply',
+                    'inbound_id': record_id, 'msg_uid': uid,
+                    'status': 'ok', 'reply': reply[:1800]}
+    except RuntimeError as exc:
+        reason = str(exc)
+        if not re.fullmatch(r'gemini_[a-z0-9_]+', reason):
+            reason = 'gemini_generation_failed'
+        log.warning('mebel_ai_failed reason=%s', reason)
+        if diagnostic:
+            try:
+                notify_odoo(url, {'kind': 'diagnostic', 'inbound_id': record_id,
+                                 'status': 'failed', 'error': reason})
+            except BridgeError:
+                return jsonify(error='diagnostic_callback_failed'), 502
+        return jsonify(error=reason), 503
+    try:
+        notify_odoo(url, callback)
+    except BridgeError as exc:
+        log.warning('mebel_callback_failed reason=%s', str(exc))
+        return jsonify(error=str(exc)), 502
+    log.info('mebel_ai_callback_accepted diagnostic=%s', diagnostic)
+    return jsonify(status='diagnostic_ok' if diagnostic else 'reply_queued'), 200
+
+
+@bridge.post('/odoo/inbound')
+def odoo_inbound():
+    return run_bridge(diagnostic=False)
+
+
+@bridge.post('/odoo/ai-test')
+def odoo_ai_test():
+    """Authenticated synthetic test: records proof in Odoo, never sends WhatsApp."""
+    return run_bridge(diagnostic=True)
