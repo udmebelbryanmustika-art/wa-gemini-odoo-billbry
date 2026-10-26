@@ -47,7 +47,7 @@ class GeminiLatencyTests(unittest.TestCase):
             self.assertEqual(call.kwargs['timeout'], (3, 6))
             self.assertEqual(call.kwargs['json']['generationConfig']['thinkingConfig'],
                              {'thinkingLevel': 'minimal'})
-        sleep.assert_called_once_with(0.25)
+        sleep.assert_called_once_with(1.0)
 
     @patch('gemini_client.time.sleep')
     @patch('gemini_client.requests.post', side_effect=requests.Timeout())
@@ -55,6 +55,29 @@ class GeminiLatencyTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'gemini_transport_error'):
             self.generate()
         self.assertEqual(post.call_count, 2)
+
+    @patch('gemini_client.time.sleep')
+    @patch('gemini_client.requests.post')
+    def test_empty_reply_recovers_within_existing_retry_budget(self, post, sleep):
+        post.side_effect = [Mock(ok=True, json=Mock(return_value={})), success()]
+        self.assertEqual(self.generate(), 'Silakan kirim ukurannya.')
+        self.assertEqual(post.call_count, 2)
+
+    @patch('gemini_client.time.sleep')
+    @patch('gemini_client.requests.post')
+    def test_empty_replies_stop_after_two_attempts(self, post, sleep):
+        post.return_value = Mock(ok=True, json=Mock(return_value={}))
+        with self.assertRaisesRegex(RuntimeError, 'gemini_empty_reply'):
+            self.generate()
+        self.assertEqual(post.call_count, 2)
+
+    @patch('gemini_client.requests.post')
+    def test_safety_block_does_not_retry(self, post):
+        post.return_value = Mock(ok=True, json=Mock(return_value={
+            'promptFeedback': {'blockReason': 'SAFETY'}}))
+        with self.assertRaisesRegex(RuntimeError, 'gemini_output_blocked'):
+            self.generate()
+        post.assert_called_once()
 
     @patch('gemini_client.requests.post', return_value=Mock(ok=False, status_code=403))
     def test_invalid_permission_does_not_retry(self, post):
