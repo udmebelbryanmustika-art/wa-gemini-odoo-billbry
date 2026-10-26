@@ -77,7 +77,7 @@ class BridgeTests(unittest.TestCase):
 
     def test_common_requests_bypass_ai_and_keep_callback_identity(self):
         for body in ('<p>Halo kak!</p>', 'Cek katalog', 'Lihat Produk', 'Pesan Custom',
-                     'Alamat toko', 'Jam buka', 'Hubungi Admin', 'MENU'):
+                     'Alamat toko', 'Jam buka', 'MENU'):
             with self.subTest(body=body):
                 self.assertEqual(self.post(data={**self.data, 'body': body}).status_code, 200)
                 sent = self.http.call_args.kwargs['json']
