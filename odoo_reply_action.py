@@ -32,6 +32,15 @@ elif kind == 'reply':
         channel = env['discuss.channel'].with_user(2).browse(msg.res_id).exists()
         if not channel:
             raise UserError('mebel_channel_missing')
+        channel = channel.try_lock_for_update()
+        if not channel:
+            raise UserError('mebel_channel_busy')
+        state_note = env['mail.message'].with_user(2).search([
+            ('model', '=', 'discuss.channel'), ('res_id', '=', channel.id),
+            ('message_type', '=', 'comment'), ('subtype_id', '=', env.ref('mail.mt_note').id),
+            ('body', 'ilike', 'MEBEL_HANDOFF_')], order='id desc', limit=1)
+        if state_note and 'MEBEL_HANDOFF_OPEN' in str(state_note.body):
+            raise UserError('mebel_handoff_paused')
         sent = channel.message_post(body=text.strip(), message_type='whatsapp_message', subtype_xmlid='mail.mt_comment')
         outgoing = env['whatsapp.message'].with_user(2).search([('wa_account_id', '=', 9), ('mail_message_id', '=', sent.id), ('message_type', '=', 'outbound')], limit=1)
         if not outgoing:

@@ -2,6 +2,11 @@ import datetime
 from pathlib import Path
 import unittest
 from unittest.mock import MagicMock
+from types import SimpleNamespace
+
+class Environment(dict):
+    def ref(self, name):
+        return SimpleNamespace(id=1)
 
 
 class UserError(Exception):
@@ -34,7 +39,11 @@ class OdooReplyGuards(unittest.TestCase):
         self.channels = MagicMock()
         self.channels.with_user.return_value = self.channels
         self.channel = self.channels.browse.return_value.exists.return_value
-        self.env = {'whatsapp.message': self.messages, 'discuss.channel': self.channels}
+        self.channel.try_lock_for_update.return_value = self.channel
+        self.notes = MagicMock()
+        self.notes.with_user.return_value = self.notes
+        self.notes.search.return_value = False
+        self.env = Environment({'whatsapp.message': self.messages, 'discuss.channel': self.channels, 'mail.message': self.notes})
         self.logs = MagicMock()
         self.payload = {'kind': 'reply', 'inbound_id': 363, 'msg_uid': 'wamid.test', 'reply': 'Bisa. Ukurannya berapa?'}
 
@@ -69,6 +78,12 @@ class OdooReplyGuards(unittest.TestCase):
     def test_truthy_non_boolean_image_flag_is_rejected(self):
         self.payload['customer_image'] = 'true'
         with self.assertRaisesRegex(UserError, 'invalid_mebel_image_flag'):
+            self.run_action()
+        self.channel.message_post.assert_not_called()
+
+    def test_inflight_ai_callback_is_blocked_after_handoff(self):
+        self.notes.search.return_value = SimpleNamespace(body='MEBEL_HANDOFF_OPEN inbound=364')
+        with self.assertRaisesRegex(UserError, 'mebel_handoff_paused'):
             self.run_action()
         self.channel.message_post.assert_not_called()
 

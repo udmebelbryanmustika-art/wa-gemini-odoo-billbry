@@ -35,3 +35,24 @@ and fixed business instructions. Callback URLs and secrets are never logged in c
 No durable retry queue is included. A failed Odoo notification must be reviewed and
 retried deliberately; generation or callback failure never reports a sent AI reply.
 Pause the outbound automation for rollback; inbound WhatsApp reception stays in Odoo.
+
+## Native admin handoff (26 October 2026)
+
+Action 1785 handles exact requests `hubungi admin`, `admin`, `bicara dengan admin`,
+and `minta admin` before catalogue or Gemini routing. It writes an internal
+`MEBEL_HANDOFF_OPEN` note in the originating Discuss channel, including the same
+bounded conversation context, and notifies only the WhatsApp account's existing
+`notify_user_ids`. It acknowledges only after the note is posted, links the outgoing
+WhatsApp record to the original inbound, and pauses subsequent AI/catalogue replies.
+Repeated requests do not create a second handoff notification. No CRM lead is created.
+
+The callback action also checks the channel state under a channel lock so an
+in-flight AI answer cannot interrupt a handoff. `lanjut citra` / `kembali ke citra`
+records `MEBEL_HANDOFF_RESUMED` and explicitly resumes automated consultation.
+Until then, customer messages stay available in the native inbox for admin handling.
+No new staff, permissions, credentials, or other-company routing are introduced.
+
+Validation: 82 local tests passed, including originating-channel context, existing
+admin recipients, duplicate request notification, pause/resume, and in-flight
+callback rejection. Native code saving/reload is verified separately; new-message
+WhatsApp delivery and admin notification require a fresh internal live test.

@@ -26,7 +26,20 @@ for wa in records.with_user(2).with_context(allowed_company_ids=[6]):
     attachments = wa.mail_message_id.attachment_ids
     if replied and (not attachments or wa.x_mebel_customer_image_done):
         continue
-    if not attachments and not env.context.get('mebel_vision_dry_run'):
+    key = vision_plain(wa.body).lower().strip(' .!?')
+    wants_admin = key in ['hubungi admin', 'admin', 'bicara dengan admin', 'minta admin']
+    wants_citra = key in ['lanjut citra', 'kembali ke citra']
+    notes = env['mail.message'].with_user(2)
+    note_domain = [('model', '=', 'discuss.channel'),
+                   ('res_id', '=', wa.mail_message_id.res_id),
+                   ('message_type', '=', 'comment'),
+                   ('subtype_id', '=', env.ref('mail.mt_note').id),
+                   ('body', 'ilike', 'MEBEL_HANDOFF_')]
+    state_note = notes.search(note_domain, order='id desc', limit=1)
+    paused = bool(state_note and 'MEBEL_HANDOFF_OPEN' in str(state_note.body))
+    if paused and not wants_admin and not wants_citra:
+        continue
+    if not attachments and not wants_admin and not wants_citra and not env.context.get('mebel_vision_dry_run'):
         env['ir.actions.server'].with_user(2).browse(1795).with_context(active_model='whatsapp.message', active_id=wa.id, active_ids=wa.ids).run()
         if W.search(domain, limit=1):
             continue
@@ -87,6 +100,45 @@ for wa in records.with_user(2).with_context(allowed_company_ids=[6]):
     if env.context.get('mebel_vision_dry_run'):
         log('MEBEL_VISION_DRY_RUN inbound=%s image=%s context_chars=%s' %
             (wa.id, values['x_mebel_customer_image_status'] or 'none', len(values['x_mebel_ai_context'])), level='info')
+        continue
+    if wants_admin or wants_citra:
+        channel = env['discuss.channel'].with_user(2).browse(wa.mail_message_id.res_id).exists()
+        if not channel:
+            raise UserError('mebel_channel_missing')
+        channel = channel.try_lock_for_update()
+        if not channel:
+            raise UserError('mebel_channel_busy')
+        # Recheck under the channel lock so concurrent requests do not notify twice.
+        if W.search(domain, limit=1):
+            continue
+        state_note = notes.search(note_domain, order='id desc', limit=1)
+        paused = bool(state_note and 'MEBEL_HANDOFF_OPEN' in str(state_note.body))
+        if wants_admin:
+            if not paused:
+                recipients = wa.wa_account_id.notify_user_ids.partner_id.ids
+                if not recipients:
+                    raise UserError('mebel_admin_not_configured')
+                channel.message_post(
+                    body='MEBEL_HANDOFF_OPEN inbound=%s\nPermintaan bantuan admin UD BILLBRY MEBEL. '
+                         'Detail berikut adalah riwayat konsultasi, bukan spesifikasi atau harga final.\n%s' %
+                         (wa.id, values['x_mebel_ai_context'] or 'Belum ada detail sebelumnya.'),
+                    message_type='comment', subtype_xmlid='mail.mt_note', partner_ids=recipients)
+            answer = ('Baik, Kak. Permintaan bantuan admin sudah tercatat di percakapan ini '
+                      'beserta riwayat yang tersedia. Tidak perlu mengulang detail sebelumnya. '
+                      'Saya jeda dulu agar admin dapat melanjutkan; waktu balasan mengikuti ketersediaan admin.')
+        else:
+            if paused:
+                channel.message_post(body='MEBEL_HANDOFF_RESUMED inbound=%s' % wa.id,
+                                     message_type='comment', subtype_xmlid='mail.mt_note')
+            answer = ('Baik, Kak, Citra lanjut membantu dari percakapan sebelumnya. '
+                      'Harga dan spesifikasi final tetap perlu konfirmasi admin. Apa yang ingin dilanjutkan?')
+        sent = channel.message_post(body=answer, message_type='whatsapp_message', subtype_xmlid='mail.mt_comment')
+        outgoing = W.search([('wa_account_id', '=', 9), ('mail_message_id', '=', sent.id),
+                             ('message_type', '=', 'outbound')], limit=1)
+        if not outgoing:
+            raise UserError('mebel_outbound_missing')
+        outgoing.write({'parent_id': wa.id})
+        log('MEBEL_HANDOFF state=%s inbound=%s' % ('open' if wants_admin else 'resumed', wa.id), level='info')
         continue
     wa.write(values)
     env['ir.actions.server'].with_user(2).browse(1780).with_context(active_model='whatsapp.message', active_id=wa.id, active_ids=wa.ids).run()

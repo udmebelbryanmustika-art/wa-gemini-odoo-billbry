@@ -47,10 +47,6 @@ def instant_reply(text):
         return ('Jam kerja kami Senin–Sabtu, pukul 07.00–16.00 WIB, Kak; '
                 'istirahat pukul 12.00–13.00 WIB. '
                 'Ada kebutuhan furnitur atau jasa CNC yang ingin dikonsultasikan?')
-    if key == 'hubungi admin':
-        return ('Baik, Kak. Agar admin bisa membantu dengan tepat, '
-                'boleh tuliskan hal utama yang ingin dibahas? '
-                'Misalnya penawaran harga, pesanan custom, atau konsultasi produk.')
     return None
 
 
