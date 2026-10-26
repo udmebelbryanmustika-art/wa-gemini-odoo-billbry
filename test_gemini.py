@@ -24,12 +24,13 @@ def test_503_recovers_on_same_model(monkeypatch):
     assert call.call_count == 2
     assert call.call_args_list[0].args[0] == call.call_args_list[1].args[0]
 
-def test_fallback_after_two_transient_failures(monkeypatch):
+def test_two_transient_failures_stop_without_broken_fallback(monkeypatch):
     call = Mock(side_effect=[Mock(ok=False, status_code=503), requests.Timeout('private'), success()])
     monkeypatch.setattr(g.requests, 'post', call)
-    assert run().startswith('Bisa')
-    assert call.call_count == 3
-    assert 'gemini-2.5-flash-lite:generateContent' in call.call_args.args[0]
+    with pytest.raises(RuntimeError, match='gemini_transport_error'):
+        run()
+    assert call.call_count == 2
+    assert 'gemini-2.5-flash-lite:generateContent' not in call.call_args.args[0]
 
 @pytest.mark.parametrize('status', [400, 401, 403, 404])
 def test_permanent_errors_not_retried(monkeypatch, status):
@@ -44,7 +45,7 @@ def test_exhausted_retries_safe_logs(monkeypatch, caplog):
     monkeypatch.setattr(g.requests, 'post', call)
     with pytest.raises(RuntimeError, match='gemini_transport_error'):
         run()
-    assert call.call_count == 3
+    assert call.call_count == 2
     assert 'private-key' not in caplog.text and 'customer-message' not in caplog.text
 
 def test_blocked_output_never_falls_back(monkeypatch):

@@ -65,11 +65,34 @@ class VisionRoutingTests(unittest.TestCase):
             SimpleNamespace(body='<p>Meja dengan laci</p>', message_type='outbound'),
             SimpleNamespace(body='<p>120 x 60 cm</p>', message_type='inbound')]
         self.run_action()
-        self.assertEqual(self.wa.write.call_args.args[0]['x_mebel_ai_context'],
-                         'Citra: Meja dengan laci\nPelanggan: 120 x 60 cm')
+        self.assertIn('Citra: Meja dengan laci\nPelanggan: 120 x 60 cm',
+                      self.wa.write.call_args.args[0]['x_mebel_ai_context'])
         history_domain = self.messages.search.call_args.args[0]
         self.assertIn(('wa_account_id', '=', 9), history_domain)
         self.assertIn(('mail_message_id.res_id', '=', 20), history_domain)
+
+    def test_address_survives_more_than_six_messages_and_long_sales_replies(self):
+        self.history.sorted.return_value = [
+            SimpleNamespace(body='Kirim ke Siman Ponorogo', message_type='inbound'),
+            *[SimpleNamespace(body='Usulan meja makan ' * 60, message_type='outbound')
+              for _ in range(12)],
+            SimpleNamespace(body='sesuai standar saja', message_type='inbound')]
+        self.run_action()
+        context = self.wa.write.call_args.args[0]['x_mebel_ai_context']
+        self.assertIn('Kirim ke Siman Ponorogo', context)
+        self.assertIn('sesuai standar saja', context)
+        self.assertLessEqual(len(context), 6000)
+        self.assertEqual(self.messages.search.call_args.kwargs['limit'], 40)
+
+    def test_newest_customer_correction_survives_full_context_budget(self):
+        self.history.sorted.return_value = [
+            *[SimpleNamespace(body='Deskripsi furnitur ' * 40, message_type='inbound')
+              for _ in range(39)],
+            SimpleNamespace(body='Koreksi alamat: Siman Ponorogo', message_type='inbound')]
+        self.run_action()
+        context = self.wa.write.call_args.args[0]['x_mebel_ai_context']
+        self.assertIn('Koreksi alamat: Siman Ponorogo', context)
+        self.assertLessEqual(len(context), 6000)
 
     def test_delayed_photo_can_be_processed_after_text_reply(self):
         self.replied = True

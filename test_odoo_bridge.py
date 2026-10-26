@@ -102,6 +102,8 @@ class BridgeTests(unittest.TestCase):
         notice = self.http.call_args.kwargs['json']['reply']
         self.assertIn('mengalami gangguan', notice)
         self.assertNotIn('diteruskan', notice)
+        self.assertNotIn('katalog', notice)
+        self.assertIn('Percakapan sebelumnya', notice)
         self.assertEqual(self.post('/odoo/ai-test').status_code, 503)
         self.assertEqual(self.http.call_args.kwargs['json']['status'], 'failed')
         self.assertNotIn('reply', self.http.call_args.kwargs['json'])

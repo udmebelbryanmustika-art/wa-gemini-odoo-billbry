@@ -240,7 +240,7 @@ def run_bridge(*, diagnostic):
         source = 'unavailable_notice'
         reply = ('Gambarnya belum berhasil saya baca, Kak. Boleh kirim ulang foto yang jelas '
                  'dan tuliskan bagian desain yang ingin dibahas? Ketik "Hubungi Admin" bila perlu bantuan.'
-                 if image else 'Maaf, layanan sedang mengalami gangguan. Ketik "katalog" untuk melihat produk atau "Hubungi Admin" untuk meminta bantuan.')
+                 if image else 'Maaf, jawaban saya sedang mengalami gangguan, Kak. Percakapan sebelumnya tetap tersedia di chat ini. Ketik "Hubungi Admin" bila ingin meminta bantuan admin.')
     log.info('mebel_reply_ready source=%s elapsed_ms=%s', source,
              round((perf_counter() - started) * 1000))
     callback = {'kind': 'diagnostic' if diagnostic else 'reply',

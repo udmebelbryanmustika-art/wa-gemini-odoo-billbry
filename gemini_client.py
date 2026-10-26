@@ -34,7 +34,7 @@ def generate_reply(text, *, api_key, model, instruction, fallback_model='', imag
     last_error = 'gemini_unavailable'
     for attempt, selected in enumerate(models):
         if attempt:
-            time.sleep(0.25)
+            time.sleep(1.0)
         generation = {'maxOutputTokens': 512, 'temperature': 0.4}
         if selected.startswith('gemini-3.1-flash-lite'):
             generation['thinkingConfig'] = {'thinkingLevel': 'minimal'}
@@ -71,9 +71,11 @@ def generate_reply(text, *, api_key, model, instruction, fallback_model='', imag
             reply = ''.join(part.get('text', '') for part in parts
                             if isinstance(part, dict) and not part.get('thought')).strip()
         except (ValueError, TypeError, AttributeError, IndexError):
-            raise RuntimeError('gemini_invalid_response') from None
+            last_error = 'gemini_invalid_response'
+            continue
         if not reply:
-            raise RuntimeError('gemini_empty_reply')
+            last_error = 'gemini_empty_reply'
+            continue
         log.info('gemini_generation_succeeded attempt=%s', attempt + 1)
         return reply[:4000]
     raise RuntimeError(last_error)

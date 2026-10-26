@@ -31,7 +31,7 @@ for wa in records.with_user(2).with_context(allowed_company_ids=[6]):
         if W.search(domain, limit=1):
             continue
     values = {'x_mebel_customer_image_data': False, 'x_mebel_customer_image_mime': False,
-              'x_mebel_customer_image_status': False, 'x_mebel_ai_context': False}
+              'x_mebel_customer_image_status': False, 'x_mebel_ai_context': ''}
     if attachments:
         photo = False
         for attachment in attachments:
@@ -53,14 +53,37 @@ for wa in records.with_user(2).with_context(allowed_company_ids=[6]):
                         ('mail_message_id.res_id', '=', wa.mail_message_id.res_id),
                         ('id', '<', wa.id),
                         ('create_date', '>=', datetime.datetime.utcnow() - datetime.timedelta(hours=23))],
-                       order='id desc', limit=6)
+                       order='id desc', limit=40)
+    # Keep customer facts from earlier turns, plus the latest dialogue. Long
+    # assistant replies must not crowd out an address or agreed specification.
     lines = []
+    customer_lines = []
     for old in history.sorted('id'):
-        body = vision_plain(old.body)[:650]
+        body = vision_plain(old.body)[:500 if old.message_type == 'inbound' else 220]
         if body:
             role = 'Pelanggan' if old.message_type == 'inbound' else 'Citra'
-            lines.append(role + ': ' + body)
-    values['x_mebel_ai_context'] = '\n'.join(lines)[:5000]
+            line = role + ': ' + body
+            lines.append(line)
+            if old.message_type == 'inbound':
+                customer_lines.append(line)
+    # Whole lines only; do not truncate the newest correction halfway through.
+    retained = []
+    used = 0
+    for line in customer_lines[::-1]:
+        if used + len(line) + 1 <= 2800:
+            retained.append(line)
+            used += len(line) + 1
+    recent = []
+    used = 0
+    for line in lines[::-1]:
+        if used + len(line) + 1 > 2900:
+            break
+        recent.append(line)
+        used += len(line) + 1
+    if lines:
+        values['x_mebel_ai_context'] = ('Detail dari pesan pelanggan (urut waktu):\n'
+            + '\n'.join(retained[::-1]) + '\nPercakapan terbaru (urut waktu):\n'
+            + '\n'.join(recent[::-1]))
     if env.context.get('mebel_vision_dry_run'):
         log('MEBEL_VISION_DRY_RUN inbound=%s image=%s context_chars=%s' %
             (wa.id, values['x_mebel_customer_image_status'] or 'none', len(values['x_mebel_ai_context'])), level='info')
