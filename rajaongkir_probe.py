@@ -57,7 +57,26 @@ def run():
                            estimated_days=r.estimated_days) for r in rates]}, ensure_ascii=True))
         return 0
     except urllib.error.HTTPError as exc:
-        print("RAJAONGKIR_PROBE_FAILED http_status_" + str(exc.code))
+        raw = exc.read(8192)
+        content_type = exc.headers.get('Content-Type', '').split(';')[0]
+        category = 'unknown'
+        try:
+            payload = json.loads(raw)
+            message = str(payload.get('meta', {}).get('message', '')).lower()
+            if any(x in message for x in ('invalid', 'api key', 'apikey', 'unauthorized')):
+                category = 'authentication'
+            elif any(x in message for x in ('quota', 'limit', 'subscription', 'plan')):
+                category = 'account_limit'
+            else:
+                category = 'provider_json_error'
+        except (ValueError, AttributeError):
+            if any(x in raw.lower() for x in (b'cloudflare', b'challenge', b'just a moment')):
+                category = 'edge_security'
+            elif b'forbidden' in raw.lower():
+                category = 'access_denied'
+        print('RAJAONGKIR_PROBE_FAILED ' + json.dumps({
+            'http_status': exc.code, 'content_type': content_type,
+            'category': category}))
         return 1
     except Exception as exc:
         # Never log keys, credentials, headers, request dumps or provider bodies.
