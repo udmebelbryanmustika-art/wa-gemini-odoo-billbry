@@ -5,6 +5,7 @@ This is a synthetic 1 kg quote, not a furniture shipping price.
 """
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -62,7 +63,9 @@ def run():
         category = 'unknown'
         try:
             payload = json.loads(raw)
-            message = str(payload.get('meta', {}).get('message', '')).lower()
+            message = str(payload.get('meta', {}).get('message') or payload.get('message') or payload.get('error') or '').lower()
+            safe_message = re.sub(r'[A-Za-z0-9_+/=-]{24,}', '[redacted]', message.replace(key.lower(), '[redacted]'))[:240]
+            print('RAJAONGKIR_PROVIDER_REASON ' + safe_message)
             if any(x in message for x in ('invalid', 'api key', 'apikey', 'unauthorized')):
                 category = 'authentication'
             elif any(x in message for x in ('quota', 'limit', 'subscription', 'plan')):
