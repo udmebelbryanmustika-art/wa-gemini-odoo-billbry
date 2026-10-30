@@ -63,7 +63,7 @@ def run():
         category = 'unknown'
         try:
             payload = json.loads(raw)
-            message = str(payload.get('meta', {}).get('message') or payload.get('message') or payload.get('error') or payload.get('data') or payload.get('errors') or '').lower()
+            message = json.dumps(payload, ensure_ascii=True).lower()
             safe_message = re.sub(r'[A-Za-z0-9_+/=-]{24,}', '[redacted]', message.replace(key.lower(), '[redacted]'))[:240]
             print('RAJAONGKIR_PROVIDER_REASON ' + safe_message)
             if any(x in message for x in ('invalid', 'api key', 'apikey', 'unauthorized')):
