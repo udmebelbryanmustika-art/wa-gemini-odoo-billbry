@@ -6,6 +6,7 @@ This is a synthetic 1 kg quote, not a furniture shipping price.
 import json
 import os
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from rajaongkir_shipping import _NoRedirect, calculate_rates, ShippingUnavailable
@@ -55,9 +56,12 @@ def run():
             'rates': [dict(courier=r.courier, service=r.service, cost_idr=r.cost_idr,
                            estimated_days=r.estimated_days) for r in rates]}, ensure_ascii=True))
         return 0
-    except Exception:
+    except urllib.error.HTTPError as exc:
+        print("RAJAONGKIR_PROBE_FAILED http_status_" + str(exc.code))
+        return 1
+    except Exception as exc:
         # Never log keys, credentials, headers, request dumps or provider bodies.
-        print('RAJAONGKIR_PROBE_FAILED provider_or_location_error')
+        print('RAJAONGKIR_PROBE_FAILED ' + type(exc).__name__)
         return 1
 
 
