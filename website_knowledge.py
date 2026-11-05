@@ -55,8 +55,8 @@ def fetch_page(url, params=None):
     # Follow only public website redirects on the exact allowed origin.
     for _ in range(4):
         url = safe_url(url)
-        with requests.get(url, params=params, timeout=(10, 10), allow_redirects=False,
-                          stream=True, headers={'User-Agent': 'Billbry-Citra-Catalog/1.0'}) as r:
+        with requests.get(url, params=params, timeout=(15, 10), allow_redirects=False,
+                          stream=True) as r:
             if r.status_code in {301, 302, 303, 307, 308}:
                 url = safe_url(urljoin(url, r.headers['Location']))
                 params = None
@@ -107,6 +107,10 @@ def detail(item):
             result['description'] = description.get_text(' ', strip=True)[:2400]
         notes = [p.get_text(' ', strip=True) for p in soup.select('#product_details p')
                  if re.search(r'harga.*pajak|pajak.*checkout|ongkir.*konfirmasi', p.get_text(' ', strip=True), re.I)]
+        product_details = soup.select_one('#product_details')
+        if product_details:
+            notes += [t for t in product_details.stripped_strings if 'pajak' in t.lower()]
+        notes = list(dict.fromkeys(notes))
         if notes:
             result['price_notes'] = [n[:500] for n in notes[:3]]
         sku = soup.select_one('[itemprop="sku"]')
