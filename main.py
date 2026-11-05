@@ -7,6 +7,8 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 3 * 1024 * 1024
 from odoo_bridge import bridge
 app.register_blueprint(bridge)
+from zapclaw_bridge import zapclaw
+app.register_blueprint(zapclaw)
 
 # Konfigurasi Gemini API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -139,6 +141,8 @@ def verify_webhook():
 # Endpoint POST untuk Menerima & Membalas Pesan WhatsApp
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    if os.getenv("ZAPCLAW_ENABLED") == "true":
+        return jsonify(status="ignored", reason="ZapClaw owns message routing"), 200
     data = request.get_json()
     
     # 1. Menangkap pesan masuk dari pelanggan
