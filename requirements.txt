@@ -3,3 +3,4 @@ requests
 google-generativeai
 gunicorn
 vercel-queue==0.10.1
+beautifulsoup4==4.15.0
