@@ -9,3 +9,6 @@ package = false
 
 [[tool.vercel.subscribers]]
 entrypoint = "citra_worker"
+
+[[tool.vercel.subscribers]]
+entrypoint = "nara_worker"
