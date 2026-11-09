@@ -66,6 +66,25 @@ class CoexistenceTests(unittest.TestCase):
         self.assertIn('Tahap percakapan: LANJUTAN', prompt)
         self.assertNotIn('previous order', prompt)
 
+    def test_simple_opening_bypasses_ai_but_uses_normal_send_guard(self):
+        job = dict(self.job, text='Halo')
+        send = Mock(return_value=201)
+        with patch('main.generate_ai_reply') as ai:
+            process_job(job, self.store, send=send)
+            process_job(job, self.store, send=send)
+        ai.assert_not_called()
+        send.assert_called_once()
+        self.assertIn('Saya Citra dari UD BILLBRY MEBEL', send.call_args.args[1])
+
+    def test_transport_error_sends_one_helpful_reply(self):
+        ai = Mock(side_effect=RuntimeError('gemini_transport_error'))
+        send = Mock(return_value=201)
+        process_job(self.job, self.store, ai, send)
+        process_job(self.job, self.store, ai, send)
+        ai.assert_called_once()
+        send.assert_called_once()
+        self.assertIn('Hubungi Admin', send.call_args.args[1])
+
     def payload(self, event='message.received'):
         return {'event': event, 'account': {'phone_number_id': NUMBER_ID, 'display_phone_number': PHONE},
                 'data': {'from': self.job['to'], 'to': self.job['to'], 'message_id': self.job['message_id'],

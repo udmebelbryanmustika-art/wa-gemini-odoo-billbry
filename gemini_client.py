@@ -16,7 +16,7 @@ def model_id(value):
     return value
 
 
-def generate_reply(text, *, api_key, model, instruction, fallback_model='', image=None):
+def generate_reply(text, *, api_key, model, instruction, fallback_model='', image=None, attempts=2):
     if not api_key or not api_key.strip():
         raise RuntimeError('gemini_key_missing')
     primary = model_id(model)
@@ -27,7 +27,7 @@ def generate_reply(text, *, api_key, model, instruction, fallback_model='', imag
         fallback = primary
     # At most two requests: primary, then configured fallback.
     # No automatic retry on invalid key, permission, missing model, or blocked output.
-    models = [primary, fallback]
+    models = [primary, fallback][:attempts]
     input_parts = [{'text': text[:20000]}]
     if image is not None:
         input_parts.append({'inlineData': {'mimeType': image['mime_type'], 'data': image['data']}})

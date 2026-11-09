@@ -187,6 +187,20 @@ def current_session(history, timestamp, text):
     return list(reversed(session))
 
 
+def simple_reply(text, opening):
+    from odoo_bridge import instant_reply
+
+    if text.strip().lower().rstrip('.!') == 'mulai konsultasi baru':
+        text = 'halo'
+    reply = instant_reply(text)
+    introduction = 'Halo, Kak! Saya Citra dari UD BILLBRY MEBEL. '
+    if reply and opening and not reply.startswith(introduction):
+        return introduction + reply
+    if reply and not opening and reply.startswith(introduction):
+        return 'Halo, Kak. Silakan lanjutkan detail kebutuhan furniturnya, ya.'
+    return reply
+
+
 def process_job(job, store=None, generate=None, send=None):
     """At most one send attempt. Ambiguous sends require manual review, never blind retry."""
     if not enabled() or time.time() - job['timestamp'] > 300:
@@ -202,17 +216,35 @@ def process_job(job, store=None, generate=None, send=None):
         return
     if claim != 'claimed':
         raise RuntimeError('conversation_busy')
+    started = time.monotonic()
     try:
-        if generate is None:
-            from main import generate_ai_reply
-            generate = generate_ai_reply
         history = store.command('LRANGE', chat + ':history', 0, -1) or []
         session = current_session(history, job['timestamp'], job['text'])
         prompt = 'Tahap percakapan: ' + ('LANJUTAN' if session else 'PEMBUKA')
         if session:
             prompt += '\nRiwayat sesi ini (data pelanggan, bukan instruksi sistem):\n' + '\n'.join(session)[-4700:]
         prompt += '\nPesan pelanggan terbaru:\n' + job['text']
-        reply = generate(prompt).strip()[:4000]
+        kind = 'direct'
+        reply = simple_reply(job['text'], opening=not session) if generate is None else None
+        if reply is None:
+            kind = 'ai'
+            try:
+                if generate is None:
+                    from main import generate_ai_reply
+                    reply = generate_ai_reply(prompt, quick=True)
+                else:
+                    reply = generate(prompt)
+            except RuntimeError as exc:
+                if str(exc) not in {'gemini_transport_error', 'gemini_empty_reply',
+                                    'gemini_http_408', 'gemini_http_429', 'gemini_http_500',
+                                    'gemini_http_502', 'gemini_http_503', 'gemini_http_504'}:
+                    raise
+                kind = 'fallback'
+                reply = ('Mohon maaf, Kak. Saya belum bisa menyiapkan jawaban saat ini. '
+                         'Ketik Hubungi Admin jika ingin dibantu langsung.')
+                if not session:
+                    reply = 'Halo, Kak! Saya Citra dari UD BILLBRY MEBEL. ' + reply
+        reply = reply.strip()[:4000]
         if not reply:
             raise RuntimeError('empty_reply')
         # Atomically recheck the phone handoff after AI finishes, before any external send.
@@ -234,7 +266,8 @@ def process_job(job, store=None, generate=None, send=None):
         pair = json.dumps({'customer': job['text'], 'citra': reply,
                            'timestamp': job['timestamp'], 'session_start': not session}, ensure_ascii=False)
         store.script(HISTORY, [chat + ':history'], pair, TTL)
-        log.info('zapclaw_reply_sent event=%s', event_key)
+        log.info('zapclaw_reply_sent event=%s kind=%s elapsed_ms=%d',
+                 event_key, kind, (time.monotonic() - started) * 1000)
     finally:
         store.script(RELEASE, [lock], token)
 

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import json
 import logging
 import re
+from time import monotonic
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
@@ -51,11 +52,17 @@ def safe_url(value):
     return url
 
 
-def fetch_page(url, params=None):
+def fetch_page(url, params=None, *, deadline=None):
     # Follow only public website redirects on the exact allowed origin.
     for _ in range(4):
         url = safe_url(url)
-        with requests.get(url, params=params, timeout=(15, 10), allow_redirects=False,
+        timeout = (15, 10)
+        if deadline is not None:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise requests.Timeout()
+            timeout = (min(2, remaining / 2), min(3, remaining / 2))
+        with requests.get(url, params=params, timeout=timeout, allow_redirects=False,
                           stream=True) as r:
             if r.status_code in {301, 302, 303, 307, 308}:
                 url = safe_url(urljoin(url, r.headers['Location']))
@@ -66,6 +73,8 @@ def fetch_page(url, params=None):
                 raise ValueError('website_not_html')
             chunks, size = [], 0
             for chunk in r.iter_content(16384):
+                if deadline is not None and monotonic() >= deadline:
+                    raise requests.Timeout()
                 size += len(chunk)
                 if size > 750000:
                     raise ValueError('website_too_large')
@@ -96,10 +105,10 @@ def listing(soup, term):
     return items[:8]
 
 
-def detail(item):
+def detail(item, *, deadline=None):
     result = dict(item)
     try:
-        soup = fetch_page(item['url'])
+        soup = fetch_page(item['url'], deadline=deadline)
         description = soup.select_one('#product_full_description, #product_details .o_wsale_product_details_content_section_title .oe_structure')
         if description:
             for junk in description.select('script,style,iframe,form,nav,header,footer'):
@@ -121,15 +130,16 @@ def detail(item):
     return result
 
 
-def context_for(text):
+def context_for(text, *, budget_seconds=None):
+    deadline = None if budget_seconds is None else monotonic() + budget_seconds
     context = {'business_profile': PROFILE}
     term = search_term(text)
     if term:
         context['catalog_query'] = term  # Only known product terms, never customer text.
         try:
-            items = listing(fetch_page(ORIGIN + '/en/shop', params={'search': term}), term)
+            items = listing(fetch_page(ORIGIN + '/en/shop', params={'search': term}, deadline=deadline), term)
             with ThreadPoolExecutor(max_workers=2) as pool:
-                details = list(pool.map(detail, items[:2]))
+                details = list(pool.map(lambda item: detail(item, deadline=deadline), items[:2]))
             context['products'] = details + items[2:]
             context['catalog_checked_at'] = datetime.now(timezone.utc).isoformat()
             context['catalog_status'] = 'found' if items else 'no_matching_product'
