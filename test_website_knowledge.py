@@ -58,7 +58,7 @@ class WebsiteKnowledgeTests(unittest.TestCase):
             get.assert_called_once()
 
     def test_context_is_product_grounded(self):
-        with patch.object(w,'fetch_page',return_value=BeautifulSoup(HTML,'html.parser')), patch.object(w,'detail',side_effect=lambda x:x):
+        with patch.object(w,'fetch_page',return_value=BeautifulSoup(HTML,'html.parser')), patch.object(w,'detail',side_effect=lambda x, **kwargs:x):
             result = json.loads(w.context_for('meja kerja'))
         self.assertEqual(result['catalog_status'], 'found')
         self.assertEqual(result['catalog_query'], 'meja kerja')
