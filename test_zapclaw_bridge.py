@@ -31,6 +31,41 @@ class CoexistenceTests(unittest.TestCase):
         self.job = {'chat': 'zc:chat:test', 'to': '6281230000000', 'text': 'Meja custom?',
                     'message_id': 'wamid.test1', 'timestamp': int(time.time())}
 
+    def test_new_session_excludes_old_and_undated_history(self):
+        history_key = self.job['chat'] + ':history'
+        self.store.command('RPUSH', history_key,
+                           json.dumps({'customer': 'undated discussion'}),
+                           json.dumps({'customer': 'old discussion',
+                                       'timestamp': self.job['timestamp'] - 86400}))
+        generate = Mock(return_value='Halo, saya Citra.')
+        process_job(self.job, self.store, generate, Mock(return_value=201))
+        prompt = generate.call_args.args[0]
+        self.assertIn('Tahap percakapan: PEMBUKA', prompt)
+        self.assertNotIn('discussion', prompt)
+        self.assertEqual(self.store.redis.llen(history_key), 3)
+
+    def test_active_session_keeps_current_context(self):
+        self.store.command('RPUSH', self.job['chat'] + ':history',
+                           json.dumps({'customer': 'current dimensions',
+                                       'timestamp': self.job['timestamp'] - 60}))
+        generate = Mock(return_value='Baik, saya lanjutkan.')
+        process_job(self.job, self.store, generate, Mock(return_value=201))
+        prompt = generate.call_args.args[0]
+        self.assertIn('Tahap percakapan: LANJUTAN', prompt)
+        self.assertIn('current dimensions', prompt)
+
+    def test_explicit_reset_keeps_old_turns_out_of_next_reply(self):
+        self.store.command('RPUSH', self.job['chat'] + ':history',
+                           json.dumps({'customer': 'previous order',
+                                       'timestamp': self.job['timestamp'] - 60}))
+        generate = Mock(return_value='Halo, saya Citra.')
+        send = Mock(return_value=201)
+        process_job(dict(self.job, text='Mulai konsultasi baru'), self.store, generate, send)
+        process_job(dict(self.job, message_id='next', text='Butuh lemari'), self.store, generate, send)
+        prompt = generate.call_args.args[0]
+        self.assertIn('Tahap percakapan: LANJUTAN', prompt)
+        self.assertNotIn('previous order', prompt)
+
     def payload(self, event='message.received'):
         return {'event': event, 'account': {'phone_number_id': NUMBER_ID, 'display_phone_number': PHONE},
                 'data': {'from': self.job['to'], 'to': self.job['to'], 'message_id': self.job['message_id'],
